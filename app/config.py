@@ -38,9 +38,9 @@ class Settings(BaseSettings):
     adjacent_chunk_count: int = 1
     retrieval_multiplier: int = 2
 
-    # Reranker (optional HTTP service)
+    # Reranker (built-in uses Gemini; set reranker_url for external cross-encoder)
     reranker_url: str | None = None
-    reranker_enabled: bool = False
+    reranker_enabled: bool = True
 
     # BM25 state
     bm25_state_path: str = "./data/bm25_df.json"
