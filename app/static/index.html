@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>RAG — Upload & Chat</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --surface: #1a2332;
+      --border: #2d3a4f;
+      --text: #e7ecf3;
+      --muted: #8b9cb3;
+      --accent: #3d8bfd;
+      --accent-dim: #2563c4;
+      --success: #34d399;
+      --error: #f87171;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+    }
+    header {
+      padding: 1rem 1.25rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      background: var(--surface);
+    }
+    header h1 { margin: 0; font-size: 1.15rem; font-weight: 600; }
+    header nav a {
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 0.9rem;
+    }
+    header nav a:hover { text-decoration: underline; }
+    main {
+      max-width: 920px;
+      margin: 0 auto;
+      padding: 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+    section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1rem 1.1rem;
+    }
+    section h2 {
+      margin: 0 0 0.75rem;
+      font-size: 0.85rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--muted);
+    }
+    .drop {
+      border: 2px dashed var(--border);
+      border-radius: 8px;
+      padding: 1.5rem;
+      text-align: center;
+      color: var(--muted);
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .drop.drag, .drop:hover {
+      border-color: var(--accent);
+      background: rgba(61, 139, 253, 0.06);
+    }
+    .drop strong { color: var(--text); }
+    input[type="file"] { display: none; }
+    .row { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-top: 0.75rem; }
+    button, .btn {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      padding: 0.45rem 1rem;
+      border-radius: 6px;
+      font-size: 0.9rem;
+      cursor: pointer;
+      font-weight: 500;
+    }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    button.secondary { background: var(--border); color: var(--text); }
+    .status { font-size: 0.85rem; margin-top: 0.5rem; }
+    .status.ok { color: var(--success); }
+    .status.err { color: var(--error); }
+    .chat-log {
+      min-height: 200px;
+      max-height: 48vh;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 0.85rem;
+    }
+    .msg { border-radius: 8px; padding: 0.65rem 0.85rem; font-size: 0.95rem; }
+    .msg.user { background: #243044; align-self: flex-end; max-width: 92%; }
+    .msg.assistant { background: #151c28; border: 1px solid var(--border); align-self: stretch; }
+    .msg .label { font-size: 0.7rem; color: var(--muted); margin-bottom: 0.35rem; text-transform: uppercase; }
+    .citations {
+      margin-top: 0.65rem;
+      padding-top: 0.65rem;
+      border-top: 1px solid var(--border);
+    }
+    .citations h3 { margin: 0 0 0.5rem; font-size: 0.75rem; color: var(--muted); text-transform: uppercase; }
+    .cite {
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-bottom: 0.5rem;
+      padding: 0.4rem 0.5rem;
+      background: var(--bg);
+      border-radius: 4px;
+      border-left: 3px solid var(--accent-dim);
+    }
+    .cite b { color: var(--text); }
+    .chat-input {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 0.75rem;
+      flex-wrap: wrap;
+    }
+    .chat-input textarea {
+      flex: 1 1 200px;
+      min-height: 44px;
+      max-height: 120px;
+      resize: vertical;
+      padding: 0.5rem 0.65rem;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      font-family: inherit;
+      font-size: 0.95rem;
+    }
+    .opts { display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; color: var(--muted); }
+    .opts input { width: 3rem; background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: 4px; padding: 0.2rem; }
+    .apikey { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; font-size: 0.8rem; color: var(--muted); margin-top: 0.35rem; }
+    .apikey input { flex: 1 1 140px; min-width: 120px; max-width: 280px; padding: 0.25rem 0.4rem; border-radius: 4px; border: 1px solid var(--border); background: var(--bg); color: var(--text); }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Production RAG</h1>
+    <nav>
+      <a href="/docs">API docs</a>
+      ·
+      <a href="/health">Health</a>
+    </nav>
+    <div class="apikey">
+      <label for="apiKey">X-API-Key</label>
+      <input type="password" id="apiKey" placeholder="if server requires API_KEYS" autocomplete="off" />
+      <button type="button" class="secondary" id="saveKey">Save</button>
+    </div>
+  </header>
+  <main>
+    <section aria-labelledby="upload-h">
+      <h2 id="upload-h">Index documents</h2>
+      <div class="drop" id="drop" tabindex="0" role="button" aria-label="Upload file">
+        <strong>Drop a file</strong> or click to choose<br />
+        <span>PDF, Word, Excel, CSV, TXT, Markdown, …</span>
+      </div>
+      <input type="file" id="file" />
+      <div class="row">
+        <button type="button" id="uploadBtn" disabled>Upload & index</button>
+        <span class="opts">Top‑K retrieval <input type="number" id="topK" value="5" min="1" max="50" /></span>
+      </div>
+      <div class="status" id="ingestStatus"></div>
+    </section>
+
+    <section aria-labelledby="chat-h">
+      <h2 id="chat-h">Chat</h2>
+      <div class="chat-log" id="log" aria-live="polite"></div>
+      <div class="chat-input">
+        <textarea id="question" placeholder="Ask a question about your indexed documents…" rows="2"></textarea>
+        <button type="button" id="askBtn">Ask</button>
+      </div>
+      <div class="status" id="queryStatus"></div>
+    </section>
+  </main>
+
+  <script>
+    const drop = document.getElementById("drop");
+    const fileInput = document.getElementById("file");
+    const uploadBtn = document.getElementById("uploadBtn");
+    const ingestStatus = document.getElementById("ingestStatus");
+    const log = document.getElementById("log");
+    const question = document.getElementById("question");
+    const askBtn = document.getElementById("askBtn");
+    const queryStatus = document.getElementById("queryStatus");
+    const topK = document.getElementById("topK");
+    const apiKeyInput = document.getElementById("apiKey");
+    const saveKeyBtn = document.getElementById("saveKey");
+
+    let selectedFile = null;
+
+    if (localStorage.getItem("ragApiKey")) apiKeyInput.value = localStorage.getItem("ragApiKey");
+    saveKeyBtn.addEventListener("click", () => {
+      const v = apiKeyInput.value.trim();
+      if (v) localStorage.setItem("ragApiKey", v);
+      else localStorage.removeItem("ragApiKey");
+      ingestStatus.textContent = v ? "API key saved in this browser." : "API key cleared.";
+      ingestStatus.className = "status ok";
+    });
+
+    function apiHeaders(json) {
+      const h = {};
+      if (json) h["Content-Type"] = "application/json";
+      const k = localStorage.getItem("ragApiKey") || apiKeyInput.value.trim();
+      if (k) h["X-API-Key"] = k;
+      return h;
+    }
+
+    drop.addEventListener("click", () => fileInput.click());
+    drop.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fileInput.click(); }
+    });
+    fileInput.addEventListener("change", () => {
+      selectedFile = fileInput.files[0] || null;
+      uploadBtn.disabled = !selectedFile;
+      ingestStatus.textContent = selectedFile ? "Selected: " + selectedFile.name : "";
+      ingestStatus.className = "status";
+    });
+    ["dragenter", "dragover"].forEach((ev) => {
+      drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add("drag"); });
+    });
+    ["dragleave", "drop"].forEach((ev) => {
+      drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove("drag"); });
+    });
+    drop.addEventListener("drop", (e) => {
+      const f = e.dataTransfer.files[0];
+      if (f) {
+        selectedFile = f;
+        uploadBtn.disabled = false;
+        ingestStatus.textContent = "Selected: " + f.name;
+        ingestStatus.className = "status";
+      }
+    });
+
+    uploadBtn.addEventListener("click", async () => {
+      if (!selectedFile) return;
+      ingestStatus.textContent = "Indexing…";
+      ingestStatus.className = "status";
+      uploadBtn.disabled = true;
+      const fd = new FormData();
+      fd.append("file", selectedFile);
+      try {
+        const r = await fetch("/v1/ingest", { method: "POST", headers: apiHeaders(false), body: fd });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(data.detail || r.statusText || "Ingest failed");
+        ingestStatus.textContent = "Indexed “" + data.document + "” — " + data.chunks_indexed + " chunks.";
+        ingestStatus.className = "status ok";
+      } catch (e) {
+        ingestStatus.textContent = String(e.message || e);
+        ingestStatus.className = "status err";
+      } finally {
+        uploadBtn.disabled = !selectedFile;
+      }
+    });
+
+    function appendMsg(role, html, citations) {
+      const wrap = document.createElement("div");
+      wrap.className = "msg " + role;
+      const label = document.createElement("div");
+      label.className = "label";
+      label.textContent = role === "user" ? "You" : "Assistant";
+      wrap.appendChild(label);
+      const body = document.createElement("div");
+      body.innerHTML = html;
+      wrap.appendChild(body);
+      if (citations && citations.length) {
+        const c = document.createElement("div");
+        c.className = "citations";
+        c.innerHTML = "<h3>Sources</h3>";
+        citations.forEach((s) => {
+          const el = document.createElement("div");
+          el.className = "cite";
+          const path = s.section_path ? " · " + s.section_path : "";
+          el.innerHTML = "<b>" + escapeHtml(s.source_document) + "</b>" + escapeHtml(path) +
+            " <small>(chunk " + s.chunk_index + ")</small><br/>" + escapeHtml(s.excerpt || "");
+          c.appendChild(el);
+        });
+        wrap.appendChild(c);
+      }
+      log.appendChild(wrap);
+      log.scrollTop = log.scrollHeight;
+    }
+
+    function escapeHtml(s) {
+      if (!s) return "";
+      const d = document.createElement("div");
+      d.textContent = s;
+      return d.innerHTML;
+    }
+
+    function formatAnswer(text) {
+      return escapeHtml(text).replace(/\n/g, "<br/>");
+    }
+
+    askBtn.addEventListener("click", async () => {
+      const q = question.value.trim();
+      if (!q) return;
+      queryStatus.textContent = "";
+      appendMsg("user", escapeHtml(q).replace(/\n/g, "<br/>"));
+      question.value = "";
+      askBtn.disabled = true;
+      const k = Math.min(50, Math.max(1, parseInt(topK.value, 10) || 5));
+      try {
+        const r = await fetch("/v1/query", {
+          method: "POST",
+          headers: apiHeaders(true),
+          body: JSON.stringify({ question: q, top_k: k }),
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail) || r.statusText);
+        appendMsg("assistant", formatAnswer(data.answer || ""), data.sources || []);
+      } catch (e) {
+        queryStatus.textContent = String(e.message || e);
+        queryStatus.className = "status err";
+        appendMsg("assistant", "<span style='color:var(--error)'>" + escapeHtml(String(e.message || e)) + "</span>");
+      } finally {
+        askBtn.disabled = false;
+      }
+    });
+
+    question.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        askBtn.click();
+      }
+    });
+  </script>
+</body>
+</html>

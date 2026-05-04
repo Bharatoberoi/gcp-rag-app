@@ -1,0 +1,39 @@
+# Run from this directory: gcloud builds submit --config cloudbuild.yaml .
+substitutions:
+  _REGION: us-central1
+  _SERVICE: gcp-rag-app
+  _REPO: rag
+  _QDRANT_URL: https://your-qdrant-endpoint:6333
+  _RUNTIME_SA: rag-runner@PROJECT_ID.iam.gserviceaccount.com
+
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - "-t"
+      - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:${SHORT_SHA}"
+      - .
+
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:${SHORT_SHA}"
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - "${_SERVICE}"
+      - "--image=${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:${SHORT_SHA}"
+      - "--region=${_REGION}"
+      - "--platform=managed"
+      - "--allow-unauthenticated"
+      - "--set-env-vars=GCP_PROJECT=${PROJECT_ID},GCP_LOCATION=${_REGION},QDRANT_URL=${_QDRANT_URL}"
+      - "--service-account=${_RUNTIME_SA}"
+
+images:
+  - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:${SHORT_SHA}"
+
+options:
+  logging: CLOUD_LOGGING_ONLY

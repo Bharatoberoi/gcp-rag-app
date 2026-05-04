@@ -1,0 +1,20 @@
+project_id     = "your-gcp-project"
+region         = "us-central1"
+service_name   = "gcp-rag-app"
+container_image = "us-central1-docker.pkg.dev/your-gcp-project/rag/gcp-rag-app:latest"
+
+# Qdrant Cloud: Cluster → Endpoint URL (must include https and port 6333 if required).
+qdrant_url = "https://xxxxxxxxxxxx.cloud.qdrant.io:6333"
+
+# Create first: echo -n "YOUR_QDRANT_API_KEY" | gcloud secrets create rag-qdrant-api-key --data-file=-
+qdrant_secret_id = "rag-qdrant-api-key"
+
+# Optional: echo -n "long-random-key-1,long-random-key-2" | gcloud secrets create rag-app-api-keys --data-file=-
+# app_api_keys_secret_id = "rag-app-api-keys"
+
+allow_unauthenticated = false
+
+# After first deploy, set to your Cloud Run URL so the /ui browser app can call the API:
+# cors_origins = "https://gcp-rag-app-xxxxx.us-central1.run.app"
+
+min_instances = 0
