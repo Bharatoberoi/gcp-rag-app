@@ -1,53 +1,64 @@
-"""Vertex AI embeddings and Gemini generation (GCP-native)."""
+"""Gemini API embeddings and generation (free tier via AI Studio)."""
 
 from __future__ import annotations
 
 from typing import Sequence
 
-import vertexai
-from vertexai.generative_models import GenerativeModel, GenerationConfig
-from vertexai.language_models import TextEmbeddingModel
+import google.generativeai as genai
 
 from app.config import settings
 
 
 class VertexRagClient:
+    """Uses the Gemini API (google-generativeai SDK) for embeddings and generation."""
+
     def __init__(self) -> None:
-        self._embed_model: TextEmbeddingModel | None = None
-        self._gen_model: GenerativeModel | None = None
         self._ready = False
+        self._gen_model = None
 
     def init(self) -> None:
         if self._ready:
             return
-        if not settings.gcp_project:
-            raise RuntimeError("GCP_PROJECT is required for Vertex AI")
-        vertexai.init(project=settings.gcp_project, location=settings.gcp_location)
-        self._embed_model = TextEmbeddingModel.from_pretrained(settings.embedding_model)
-        self._gen_model = GenerativeModel(settings.gemini_model)
+        if not settings.gemini_api_key:
+            raise RuntimeError("GEMINI_API_KEY is required")
+        genai.configure(api_key=settings.gemini_api_key)
+        self._gen_model = genai.GenerativeModel(settings.gemini_model)
         self._ready = True
 
     def embed_texts(self, texts: Sequence[str]) -> list[list[float]]:
         self.init()
-        assert self._embed_model is not None
         batch_size = 16
         out: list[list[float]] = []
         for i in range(0, len(texts), batch_size):
             batch = list(texts[i : i + batch_size])
-            preds = self._embed_model.get_embeddings(batch)
-            for p in preds:
-                vals = getattr(p, "values", None) or getattr(p, "value", None)
-                if vals is None:
-                    raise RuntimeError("Unexpected embedding response shape")
-                out.append(list(vals))
+            result = genai.embed_content(
+                model=f"models/{settings.embedding_model}",
+                content=batch,
+                task_type="retrieval_document",
+                output_dimensionality=settings.embedding_dimensions,
+            )
+            if isinstance(result["embedding"], list) and isinstance(result["embedding"][0], list):
+                out.extend(result["embedding"])
+            else:
+                out.append(result["embedding"])
         return out
+
+    def embed_query(self, text: str) -> list[float]:
+        self.init()
+        result = genai.embed_content(
+            model=f"models/{settings.embedding_model}",
+            content=text,
+            task_type="retrieval_query",
+            output_dimensionality=settings.embedding_dimensions,
+        )
+        return result["embedding"]
 
     def generate_answer(self, system_prompt: str, user_prompt: str) -> str:
         self.init()
         assert self._gen_model is not None
-        cfg = GenerationConfig(temperature=0.2, max_output_tokens=2048)
+        config = genai.GenerationConfig(temperature=0.2, max_output_tokens=2048)
         prompt = f"{system_prompt}\n\n{user_prompt}"
-        resp = self._gen_model.generate_content(prompt, generation_config=cfg)
+        resp = self._gen_model.generate_content(prompt, generation_config=config)
         if getattr(resp, "text", None):
             return str(resp.text).strip()
         if not resp.candidates:

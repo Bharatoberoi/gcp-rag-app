@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -22,10 +21,6 @@ STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    gac = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
-    if gac and not Path(gac).is_file():
-        del os.environ["GOOGLE_APPLICATION_CREDENTIALS"]
-
     if settings.production_mode:
         qu = (settings.qdrant_url or "").strip().lower()
         if qu in {"", "memory", ":memory:", "inmem"}:
@@ -92,7 +87,7 @@ def create_app() -> FastAPI:
                 qdrant_ok = f"error:{type(e).__name__}"
 
         vertex_ok = "skipped"
-        if settings.gcp_project:
+        if settings.gemini_api_key:
             try:
                 _rag().vertex.init()
                 vertex_ok = "ok"

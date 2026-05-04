@@ -18,12 +18,15 @@ def _env_bool(v: object) -> bool:
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
-    # GCP / Vertex
-    gcp_project: str = ""
-    gcp_location: str = "us-central1"
+    # Gemini API (free tier via AI Studio)
+    gemini_api_key: str = ""
     embedding_model: str = "text-embedding-004"
     gemini_model: str = "gemini-2.5-flash"
     embedding_dimensions: int = 768
+
+    # GCP (legacy, not needed when using Gemini API key)
+    gcp_project: str = ""
+    gcp_location: str = "us-central1"
 
     # Qdrant (managed: https://xxxx.cloud.qdrant.io:6333 — use TLS URL from Qdrant Cloud console)
     qdrant_url: str = "http://localhost:6333"
