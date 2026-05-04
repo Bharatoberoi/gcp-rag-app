@@ -53,5 +53,5 @@ class QueryResponse(BaseModel):
 class HealthResponse(BaseModel):
     status: str
     qdrant: str
-    vertex: str
+    gemini: str
     reranker: str

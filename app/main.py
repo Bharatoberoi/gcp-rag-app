@@ -1,4 +1,4 @@
-"""Production-style FastAPI entrypoint for GCP Cloud Run."""
+"""FastAPI entrypoint for the RAG application."""
 
 from __future__ import annotations
 
@@ -45,7 +45,7 @@ def _qdrant_health_headers() -> dict[str, str]:
 def create_app() -> FastAPI:
     docs = settings.docs_enabled
     app = FastAPI(
-        title="GCP Production RAG",
+        title="Production RAG",
         lifespan=lifespan,
         docs_url="/docs" if docs else None,
         redoc_url="/redoc" if docs else None,
@@ -86,13 +86,13 @@ def create_app() -> FastAPI:
             except Exception as e:
                 qdrant_ok = f"error:{type(e).__name__}"
 
-        vertex_ok = "skipped"
+        gemini_ok = "skipped"
         if settings.gemini_api_key:
             try:
-                _rag().vertex.init()
-                vertex_ok = "ok"
+                _rag().gemini.init()
+                gemini_ok = "ok"
             except Exception as e:
-                vertex_ok = f"error:{type(e).__name__}"
+                gemini_ok = f"error:{type(e).__name__}"
 
         rer = "disabled"
         if settings.reranker_enabled and settings.reranker_url:
@@ -103,7 +103,7 @@ def create_app() -> FastAPI:
             except Exception as e:
                 rer = f"error:{type(e).__name__}"
 
-        return HealthResponse(status="ok", qdrant=qdrant_ok, vertex=vertex_ok, reranker=rer)
+        return HealthResponse(status="ok", qdrant=qdrant_ok, gemini=gemini_ok, reranker=rer)
 
     @app.post("/v1/ingest", response_model=IngestResponse)
     async def ingest(
@@ -153,13 +153,13 @@ def create_app() -> FastAPI:
         if STATIC_DIR.is_dir():
             return RedirectResponse(url="/ui/", status_code=302)
         return {
-            "service": "gcp-rag-app",
+            "service": "rag-app",
             "ui": "/ui/",
             "techniques": [
                 "hybrid_dense_sparse_bm25_rrf",
                 "adjacent_chunk_expansion",
                 "cross_encoder_rerank_optional",
-                "vertex_embeddings_and_gemini",
+                "gemini_embeddings_and_generation",
             ],
             "docs": "/docs" if settings.docs_enabled else None,
         }

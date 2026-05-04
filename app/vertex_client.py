@@ -9,7 +9,7 @@ import google.generativeai as genai
 from app.config import settings
 
 
-class VertexRagClient:
+class GeminiClient:
     """Uses the Gemini API (google-generativeai SDK) for embeddings and generation."""
 
     def __init__(self) -> None:
@@ -35,7 +35,6 @@ class VertexRagClient:
                 model=f"models/{settings.embedding_model}",
                 content=batch,
                 task_type="retrieval_document",
-                output_dimensionality=settings.embedding_dimensions,
             )
             if isinstance(result["embedding"], list) and isinstance(result["embedding"][0], list):
                 out.extend(result["embedding"])
@@ -49,7 +48,6 @@ class VertexRagClient:
             model=f"models/{settings.embedding_model}",
             content=text,
             task_type="retrieval_query",
-            output_dimensionality=settings.embedding_dimensions,
         )
         return result["embedding"]
 

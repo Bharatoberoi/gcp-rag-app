@@ -1,4 +1,4 @@
-"""End-to-end RAG orchestration mirroring reference RagService flow."""
+"""End-to-end RAG orchestration."""
 
 from __future__ import annotations
 
@@ -10,14 +10,14 @@ from app.document_loaders import load_document
 from app.qdrant_store import HybridQdrantStore
 from app.reranker_client import rerank_chunks
 from app.schemas import DocumentChunk, SourceCitation
-from app.vertex_client import VertexRagClient
+from app.vertex_client import GeminiClient
 
 
 class RagPipeline:
     def __init__(self) -> None:
         self.chunker = ChunkingService()
         self.store = HybridQdrantStore()
-        self.vertex = VertexRagClient()
+        self.gemini = GeminiClient()
 
     def ingest_bytes(self, filename: str, raw: bytes) -> int:
         sections = load_document(filename, raw)
@@ -27,7 +27,7 @@ class RagPipeline:
         if not chunks:
             return 0
         texts = [c.embedding_input() for c in chunks]
-        vectors = self.vertex.embed_texts(texts)
+        vectors = self.gemini.embed_texts(texts)
         if len(vectors) != len(chunks):
             raise RuntimeError("Embedding count mismatch")
         self.store.upsert_chunks(chunks, vectors)
@@ -53,8 +53,8 @@ class RagPipeline:
         return "\n".join(parts)
 
     async def answer(self, question: str, top_k: int = 5) -> tuple[str, list[SourceCitation]]:
-        self.vertex.init()
-        q_emb = self.vertex.embed_texts([question])[0]
+        self.gemini.init()
+        q_emb = self.gemini.embed_texts([question])[0]
         retrieve_k = max(top_k, top_k * settings.retrieval_multiplier)
         hits = self.store.search_hybrid(question, q_emb, retrieve_k)
         hits = self.store.expand_adjacent(hits, settings.adjacent_chunk_count)
@@ -65,7 +65,7 @@ class RagPipeline:
             "If the context is insufficient, say so. Cite sources by document name when possible."
         )
         user = f"Question: {question}\n\n{context}"
-        answer = self.vertex.generate_answer(system, user)
+        answer = self.gemini.generate_answer(system, user)
         sources = [
             SourceCitation(
                 source_document=c.source_document,

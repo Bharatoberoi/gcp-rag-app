@@ -18,23 +18,19 @@ def _env_bool(v: object) -> bool:
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
-    # Gemini API (free tier via AI Studio)
+    # Gemini API (free tier via https://aistudio.google.com/apikey)
     gemini_api_key: str = ""
-    embedding_model: str = "text-embedding-004"
+    embedding_model: str = "embedding-001"
     gemini_model: str = "gemini-2.5-flash"
     embedding_dimensions: int = 768
 
-    # GCP (legacy, not needed when using Gemini API key)
-    gcp_project: str = ""
-    gcp_location: str = "us-central1"
-
-    # Qdrant (managed: https://xxxx.cloud.qdrant.io:6333 — use TLS URL from Qdrant Cloud console)
+    # Qdrant
     qdrant_url: str = "http://localhost:6333"
     qdrant_api_key: str | None = None
     qdrant_collection: str = "documents_hybrid"
     dense_vector_weight: float = 0.7
 
-    # Chunking (aligned with reference defaults)
+    # Chunking
     max_chunk_tokens: int = 400
     chunk_overlap_tokens: int = 50
 
@@ -46,16 +42,14 @@ class Settings(BaseSettings):
     reranker_url: str | None = None
     reranker_enabled: bool = False
 
-    # BM25 state (local path; on Cloud Run mount a volume or sync via your ops pipeline)
+    # BM25 state
     bm25_state_path: str = "./data/bm25_df.json"
     upload_dir: str = "./data/uploads"
 
     # Production
     production_mode: bool = False
     docs_enabled: bool = True
-    # Comma-separated origins for browser clients, e.g. https://your-run-url.run.app
     cors_origins: str = ""
-    # Comma-separated API keys; if non-empty, /v1/* requires header X-API-Key
     api_keys: str = ""
 
     @field_validator("qdrant_url", mode="before")
