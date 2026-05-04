@@ -20,9 +20,9 @@ class Settings(BaseSettings):
 
     # Gemini API (free tier via https://aistudio.google.com/apikey)
     gemini_api_key: str = ""
-    embedding_model: str = "embedding-001"
+    embedding_model: str = "gemini-embedding-001"
     gemini_model: str = "gemini-2.5-flash"
-    embedding_dimensions: int = 768
+    embedding_dimensions: int = 3072
 
     # Qdrant
     qdrant_url: str = "http://localhost:6333"
