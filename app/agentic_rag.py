@@ -1,43 +1,45 @@
 """Agentic RAG: a reasoning loop that decides when to retrieve, what to query,
 and when it has enough information to answer.
 
-Unlike single-shot RAG (query → retrieve → answer), Agentic RAG:
+Unlike single-shot RAG (query -> retrieve -> answer), Agentic RAG:
 1. Analyzes the question to determine what information is needed
 2. Formulates targeted sub-queries
 3. Retrieves and evaluates results
 4. Decides if more retrieval is needed or if it can answer
 5. Synthesizes the final answer from all gathered context
-
-This is essentially ReAct (Reasoning + Acting) applied to RAG.
 """
 
 from __future__ import annotations
 
 import json
 
-import google.generativeai as genai
+import httpx
 
 from app.config import settings
-from app.schemas import DocumentChunk
+
+BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
 
 
-MAX_ITERATIONS = 3
+def _generate(prompt: str, temperature: float = 0.1, max_tokens: int = 300) -> str:
+    url = f"{BASE_URL}/models/{settings.gemini_model}:generateContent?key={settings.gemini_api_key}"
+    body = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {"temperature": temperature, "maxOutputTokens": max_tokens},
+    }
+    with httpx.Client(timeout=30.0) as client:
+        resp = client.post(url, json=body)
+        resp.raise_for_status()
+        data = resp.json()
+    candidates = data.get("candidates", [])
+    if not candidates:
+        return ""
+    parts = candidates[0].get("content", {}).get("parts", [])
+    return "".join(p.get("text", "") for p in parts).strip()
 
 
 class AgenticRag:
-    def __init__(self) -> None:
-        self._model = None
-
-    def _ensure_model(self) -> None:
-        if self._model:
-            return
-        genai.configure(api_key=settings.gemini_api_key)
-        self._model = genai.GenerativeModel(settings.gemini_model)
-
     def plan_queries(self, question: str) -> list[str]:
         """Decompose a complex question into targeted sub-queries for retrieval."""
-        self._ensure_model()
-        assert self._model is not None
         prompt = (
             "You are a research planner. Given a user question, decompose it into "
             "1-3 specific search queries that together will gather all information "
@@ -51,11 +53,7 @@ class AgenticRag:
             "JSON array of queries:"
         )
         try:
-            resp = self._model.generate_content(
-                prompt,
-                generation_config=genai.GenerationConfig(temperature=0.1, max_output_tokens=300),
-            )
-            text = (resp.text or "").strip()
+            text = _generate(prompt, temperature=0.1, max_tokens=300)
             text = text.replace("```json", "").replace("```", "").strip()
             queries = json.loads(text)
             if isinstance(queries, list) and all(isinstance(q, str) for q in queries):
@@ -65,13 +63,7 @@ class AgenticRag:
         return [question]
 
     def evaluate_sufficiency(self, question: str, context: str) -> dict:
-        """Evaluate if gathered context is sufficient to answer the question.
-
-        Returns:
-            {"sufficient": bool, "missing": str, "follow_up_query": str}
-        """
-        self._ensure_model()
-        assert self._model is not None
+        """Evaluate if gathered context is sufficient to answer the question."""
         prompt = (
             "You are evaluating whether retrieved context is sufficient to answer a question.\n\n"
             f"Question: {question}\n\n"
@@ -84,11 +76,7 @@ class AgenticRag:
             "JSON:"
         )
         try:
-            resp = self._model.generate_content(
-                prompt,
-                generation_config=genai.GenerationConfig(temperature=0.0, max_output_tokens=200),
-            )
-            text = (resp.text or "").strip()
+            text = _generate(prompt, temperature=0.0, max_tokens=200)
             text = text.replace("```json", "").replace("```", "").strip()
             result = json.loads(text)
             return {

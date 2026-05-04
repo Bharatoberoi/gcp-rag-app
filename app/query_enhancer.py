@@ -11,27 +11,33 @@ specific search queries before retrieval.
 
 from __future__ import annotations
 
-import google.generativeai as genai
+import httpx
 
 from app.config import settings
 
+BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
+
+
+def _generate(prompt: str, temperature: float = 0.1, max_tokens: int = 300) -> str:
+    url = f"{BASE_URL}/models/{settings.gemini_model}:generateContent?key={settings.gemini_api_key}"
+    body = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {"temperature": temperature, "maxOutputTokens": max_tokens},
+    }
+    with httpx.Client(timeout=30.0) as client:
+        resp = client.post(url, json=body)
+        resp.raise_for_status()
+        data = resp.json()
+    candidates = data.get("candidates", [])
+    if not candidates:
+        return ""
+    parts = candidates[0].get("content", {}).get("parts", [])
+    return "".join(p.get("text", "") for p in parts).strip()
+
 
 class QueryEnhancer:
-    def __init__(self) -> None:
-        self._ready = False
-        self._model = None
-
-    def _ensure_ready(self) -> None:
-        if self._ready:
-            return
-        genai.configure(api_key=settings.gemini_api_key)
-        self._model = genai.GenerativeModel(settings.gemini_model)
-        self._ready = True
-
     def rewrite_query(self, question: str) -> str:
         """Rewrite an ambiguous user query into a clear, specific search query."""
-        self._ensure_ready()
-        assert self._model is not None
         prompt = (
             "You are a search query optimizer. Rewrite the following user question "
             "into a clear, specific search query that will retrieve the most relevant "
@@ -39,23 +45,13 @@ class QueryEnhancer:
             f"User question: {question}\n\nRewritten query:"
         )
         try:
-            resp = self._model.generate_content(
-                prompt,
-                generation_config=genai.GenerationConfig(temperature=0.1, max_output_tokens=200),
-            )
-            rewritten = (resp.text or "").strip()
-            return rewritten if rewritten else question
+            result = _generate(prompt, temperature=0.1, max_tokens=200)
+            return result if result else question
         except Exception:
             return question
 
     def generate_hypothetical_answer(self, question: str) -> str:
-        """Generate a hypothetical document passage that would answer the question (HyDE).
-
-        The hypothetical answer uses terminology and phrasing similar to real documents,
-        making its embedding closer to relevant passages than the raw query embedding.
-        """
-        self._ensure_ready()
-        assert self._model is not None
+        """Generate a hypothetical document passage that would answer the question (HyDE)."""
         prompt = (
             "You are a document passage generator. Given the question below, write a "
             "short paragraph (3-5 sentences) that would be a perfect passage from a "
@@ -64,11 +60,7 @@ class QueryEnhancer:
             f"Question: {question}\n\nHypothetical document passage:"
         )
         try:
-            resp = self._model.generate_content(
-                prompt,
-                generation_config=genai.GenerationConfig(temperature=0.3, max_output_tokens=300),
-            )
-            hyde = (resp.text or "").strip()
-            return hyde if hyde else question
+            result = _generate(prompt, temperature=0.3, max_tokens=300)
+            return result if result else question
         except Exception:
             return question

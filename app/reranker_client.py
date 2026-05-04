@@ -1,39 +1,33 @@
 """Reranking: score and re-order retrieved chunks by relevance.
 
-Top-k retrieval returns 10-20 candidates. A reranker then picks the best 3-5.
-This alone can double answer quality because embedding similarity is a rough
-proxy for relevance — reranking applies deeper semantic understanding.
-
-This module supports two modes:
+Supports two modes:
 1. Built-in Gemini reranker (free, no external service needed)
-2. External HTTP cross-encoder (e.g., Cohere Rerank, BGE) for production
+2. External HTTP cross-encoder (e.g., Cohere Rerank, BGE)
 """
 
 from __future__ import annotations
 
 import json
 
-import google.generativeai as genai
 import httpx
 
 from app.config import settings
 from app.schemas import DocumentChunk
 
+BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
+
 
 async def rerank_chunks(query: str, chunks: list[DocumentChunk], top_k: int) -> list[DocumentChunk]:
-    """Rerank chunks using the configured method."""
     if not chunks:
         return []
     if not settings.reranker_enabled:
         return chunks[:top_k]
-
     if settings.reranker_url:
         return await _rerank_external(query, chunks, top_k)
     return _rerank_with_gemini(query, chunks, top_k)
 
 
 async def _rerank_external(query: str, chunks: list[DocumentChunk], top_k: int) -> list[DocumentChunk]:
-    """Rerank using an external HTTP cross-encoder service."""
     docs = [c.text for c in chunks]
     url = settings.reranker_url.rstrip("/") + "/rerank"
     try:
@@ -51,17 +45,9 @@ async def _rerank_external(query: str, chunks: list[DocumentChunk], top_k: int) 
 
 
 def _rerank_with_gemini(query: str, chunks: list[DocumentChunk], top_k: int) -> list[DocumentChunk]:
-    """Use Gemini to score relevance of each chunk to the query.
-
-    Asks the LLM to rate each passage's relevance on a 1-10 scale,
-    then sorts by score. This is slower than a dedicated cross-encoder
-    but works without any additional service.
-    """
+    """Use Gemini to score relevance of each chunk to the query."""
     if not settings.gemini_api_key:
         return chunks[:top_k]
-
-    genai.configure(api_key=settings.gemini_api_key)
-    model = genai.GenerativeModel(settings.gemini_model)
 
     passages = ""
     for i, c in enumerate(chunks):
@@ -74,16 +60,26 @@ def _rerank_with_gemini(query: str, chunks: list[DocumentChunk], top_k: int) -> 
         "Return ONLY a JSON array of objects with 'index' and 'score' fields.\n\n"
         f"Query: {query}\n\n"
         f"Passages:\n{passages}\n"
-        "Output format: [{\"index\": 0, \"score\": 8}, ...]\n"
+        'Output format: [{"index": 0, "score": 8}, ...]\n'
         "JSON array:"
     )
 
+    url = f"{BASE_URL}/models/{settings.gemini_model}:generateContent?key={settings.gemini_api_key}"
+    body = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {"temperature": 0.0, "maxOutputTokens": 1024},
+    }
+
     try:
-        resp = model.generate_content(
-            prompt,
-            generation_config=genai.GenerationConfig(temperature=0.0, max_output_tokens=1024),
-        )
-        text = (resp.text or "").strip()
+        with httpx.Client(timeout=60.0) as client:
+            resp = client.post(url, json=body)
+            resp.raise_for_status()
+            data = resp.json()
+        candidates = data.get("candidates", [])
+        if not candidates:
+            return chunks[:top_k]
+        parts = candidates[0].get("content", {}).get("parts", [])
+        text = "".join(p.get("text", "") for p in parts).strip()
         text = text.replace("```json", "").replace("```", "").strip()
         scores = json.loads(text)
         score_map = {item["index"]: item["score"] for item in scores}
