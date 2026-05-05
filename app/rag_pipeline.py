@@ -128,24 +128,20 @@ class RagPipeline:
         return hits
 
     async def answer_async(self, question: str, top_k: int = 5) -> tuple[str, list[SourceCitation]]:
-        """Full agentic RAG pipeline."""
+        """RAG pipeline. Uses agentic features if enabled, otherwise simple retrieval."""
         self.gemini.init()
 
-        sub_queries = await self._plan_queries(question)
+        if settings.agentic_mode:
+            all_chunks = await self._agentic_retrieve(question, top_k)
+            ranked = await self._rerank(question, all_chunks, top_k)
+        else:
+            q_embedding = (await self.gemini.embed_texts_async([question]))[0]
+            retrieve_k = max(top_k, top_k * settings.retrieval_multiplier)
+            hits = self.store.search_hybrid(question, q_embedding, retrieve_k)
+            hits = self.store.expand_adjacent(hits, settings.adjacent_chunk_count)
+            ranked = hits[:top_k]
 
-        all_chunks: list[DocumentChunk] = []
-        seen_ids: set[str] = set()
-
-        for sub_q in sub_queries:
-            hits = await self._retrieve(sub_q, top_k)
-            for chunk in hits:
-                if chunk.id not in seen_ids:
-                    all_chunks.append(chunk)
-                    seen_ids.add(chunk.id)
-
-        ranked = await self._rerank(question, all_chunks, top_k)
         context = self._format_context(ranked)
-
         system = (
             "You are a careful assistant. Answer using ONLY the provided context. "
             "If the context is insufficient, say so. Cite sources by document name when possible."
@@ -163,3 +159,16 @@ class RagPipeline:
             for c in ranked
         ]
         return answer, sources
+
+    async def _agentic_retrieve(self, question: str, top_k: int) -> list[DocumentChunk]:
+        """Full agentic retrieval: plan, HyDE, multi-query, rerank."""
+        sub_queries = await self._plan_queries(question)
+        all_chunks: list[DocumentChunk] = []
+        seen_ids: set[str] = set()
+        for sub_q in sub_queries:
+            hits = await self._retrieve(sub_q, top_k)
+            for chunk in hits:
+                if chunk.id not in seen_ids:
+                    all_chunks.append(chunk)
+                    seen_ids.add(chunk.id)
+        return all_chunks

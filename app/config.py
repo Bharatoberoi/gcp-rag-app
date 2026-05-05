@@ -21,8 +21,10 @@ class Settings(BaseSettings):
     # Gemini API (free tier via https://aistudio.google.com/apikey)
     gemini_api_key: str = ""
     embedding_model: str = "gemini-embedding-001"
-    gemini_model: str = "gemini-2.5-flash"
+    gemini_model: str = "gemini-2.0-flash"
     embedding_dimensions: int = 3072
+    # Enable agentic features (multiple LLM calls per query — needs higher rate limits)
+    agentic_mode: bool = False
 
     # Qdrant
     qdrant_url: str = "http://localhost:6333"
