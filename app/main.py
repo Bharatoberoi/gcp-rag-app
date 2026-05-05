@@ -109,17 +109,17 @@ def create_app() -> FastAPI:
         return HealthResponse(status="ok", qdrant=qdrant_ok, gemini=gemini_ok, reranker=rer)
 
     @app.post("/v1/ingest", response_model=IngestResponse)
-    def ingest(
+    async def ingest(
         file: UploadFile = File(...),
         _: None = Depends(require_api_key_if_configured),
     ):
         if not file.filename:
             raise HTTPException(400, "filename required")
-        raw = file.file.read()
+        raw = await file.read()
         if not raw:
             raise HTTPException(400, "empty file")
         try:
-            n = _rag().ingest_bytes(file.filename, raw)
+            n = await _rag().ingest_bytes_async(file.filename, raw)
         except ValueError as e:
             raise HTTPException(400, str(e)) from e
         except Exception as e:
@@ -139,14 +139,14 @@ def create_app() -> FastAPI:
         return {"deleted": name}
 
     @app.post("/v1/query", response_model=QueryResponse)
-    def query(
+    async def query(
         body: QueryRequest,
         _: None = Depends(require_api_key_if_configured),
     ):
         if not body.question.strip():
             raise HTTPException(400, "question required")
         try:
-            answer, sources = _rag().answer_sync(body.question, body.top_k)
+            answer, sources = await _rag().answer_async(body.question, body.top_k)
         except Exception as e:
             raise HTTPException(500, f"query failed: {e}") from e
         return QueryResponse(answer=answer, sources=sources)
