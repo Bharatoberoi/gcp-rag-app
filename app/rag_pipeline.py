@@ -18,7 +18,7 @@ from app.config import settings
 from app.document_loaders import load_document
 from app.qdrant_store import HybridQdrantStore
 from app.query_enhancer import QueryEnhancer
-from app.reranker_client import rerank_chunks
+from app.reranker_client import rerank_chunks_sync
 from app.schemas import DocumentChunk, SourceCitation
 from app.vertex_client import GeminiClient
 
@@ -74,7 +74,7 @@ class RagPipeline:
         hits = self.store.expand_adjacent(hits, settings.adjacent_chunk_count)
         return hits
 
-    async def answer(self, question: str, top_k: int = 5) -> tuple[str, list[SourceCitation]]:
+    def answer_sync(self, question: str, top_k: int = 5) -> tuple[str, list[SourceCitation]]:
         """Agentic RAG: plan queries, retrieve iteratively, rerank, generate answer."""
         self.gemini.init()
 
@@ -100,7 +100,7 @@ class RagPipeline:
                     all_chunks.append(chunk)
                     seen_ids.add(chunk.id)
 
-        ranked = await rerank_chunks(question, all_chunks, top_k)
+        ranked = rerank_chunks_sync(question, all_chunks, top_k)
         context = self._format_context(ranked)
 
         system = (

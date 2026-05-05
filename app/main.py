@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 from contextlib import asynccontextmanager
+from functools import partial
 from pathlib import Path
 
 import httpx
@@ -116,7 +118,10 @@ def create_app() -> FastAPI:
         if not raw:
             raise HTTPException(400, "empty file")
         try:
-            n = _rag().ingest_bytes(file.filename, raw)
+            loop = asyncio.get_event_loop()
+            n = await loop.run_in_executor(
+                None, partial(_rag().ingest_bytes, file.filename, raw)
+            )
         except ValueError as e:
             raise HTTPException(400, str(e)) from e
         except Exception as e:
@@ -143,7 +148,10 @@ def create_app() -> FastAPI:
         if not body.question.strip():
             raise HTTPException(400, "question required")
         try:
-            answer, sources = await _rag().answer(body.question, body.top_k)
+            loop = asyncio.get_event_loop()
+            answer, sources = await loop.run_in_executor(
+                None, partial(_rag().answer_sync, body.question, body.top_k)
+            )
         except Exception as e:
             raise HTTPException(500, f"query failed: {e}") from e
         return QueryResponse(answer=answer, sources=sources)

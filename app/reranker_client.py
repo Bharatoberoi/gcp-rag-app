@@ -17,6 +17,34 @@ from app.schemas import DocumentChunk
 BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
 
 
+def rerank_chunks_sync(query: str, chunks: list[DocumentChunk], top_k: int) -> list[DocumentChunk]:
+    """Synchronous reranking."""
+    if not chunks:
+        return []
+    if not settings.reranker_enabled:
+        return chunks[:top_k]
+    if settings.reranker_url:
+        return _rerank_external_sync(query, chunks, top_k)
+    return _rerank_with_gemini(query, chunks, top_k)
+
+
+def _rerank_external_sync(query: str, chunks: list[DocumentChunk], top_k: int) -> list[DocumentChunk]:
+    docs = [c.text for c in chunks]
+    url = settings.reranker_url.rstrip("/") + "/rerank"
+    try:
+        with httpx.Client(timeout=120.0) as client:
+            r = client.post(url, json={"query": query, "documents": docs})
+            r.raise_for_status()
+            data = r.json()
+            scores = data.get("scores") or []
+    except Exception:
+        return chunks[:top_k]
+    if len(scores) != len(chunks):
+        return chunks[:top_k]
+    order = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)
+    return [chunks[i] for i in order[:top_k]]
+
+
 async def rerank_chunks(query: str, chunks: list[DocumentChunk], top_k: int) -> list[DocumentChunk]:
     if not chunks:
         return []
