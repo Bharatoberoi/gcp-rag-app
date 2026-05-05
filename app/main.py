@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import asyncio
 from contextlib import asynccontextmanager
-from functools import partial
 from pathlib import Path
 
 import httpx
@@ -111,20 +109,17 @@ def create_app() -> FastAPI:
         return HealthResponse(status="ok", qdrant=qdrant_ok, gemini=gemini_ok, reranker=rer)
 
     @app.post("/v1/ingest", response_model=IngestResponse)
-    async def ingest(
+    def ingest(
         file: UploadFile = File(...),
         _: None = Depends(require_api_key_if_configured),
     ):
         if not file.filename:
             raise HTTPException(400, "filename required")
-        raw = await file.read()
+        raw = file.file.read()
         if not raw:
             raise HTTPException(400, "empty file")
         try:
-            loop = asyncio.get_event_loop()
-            n = await loop.run_in_executor(
-                None, partial(_rag().ingest_bytes, file.filename, raw)
-            )
+            n = _rag().ingest_bytes(file.filename, raw)
         except ValueError as e:
             raise HTTPException(400, str(e)) from e
         except Exception as e:
@@ -136,7 +131,7 @@ def create_app() -> FastAPI:
         )
 
     @app.delete("/v1/documents/{name:path}")
-    async def delete_document(
+    def delete_document(
         name: str,
         _: None = Depends(require_api_key_if_configured),
     ):
@@ -144,17 +139,14 @@ def create_app() -> FastAPI:
         return {"deleted": name}
 
     @app.post("/v1/query", response_model=QueryResponse)
-    async def query(
+    def query(
         body: QueryRequest,
         _: None = Depends(require_api_key_if_configured),
     ):
         if not body.question.strip():
             raise HTTPException(400, "question required")
         try:
-            loop = asyncio.get_event_loop()
-            answer, sources = await loop.run_in_executor(
-                None, partial(_rag().answer_sync, body.question, body.top_k)
-            )
+            answer, sources = _rag().answer_sync(body.question, body.top_k)
         except Exception as e:
             raise HTTPException(500, f"query failed: {e}") from e
         return QueryResponse(answer=answer, sources=sources)
