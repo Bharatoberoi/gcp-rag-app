@@ -96,6 +96,12 @@ def create_app() -> FastAPI:
                     gemini_ok = "ok" if r.status_code < 400 else f"status_{r.status_code}"
             except Exception as e:
                 gemini_ok = f"error:{type(e).__name__}"
+        embeddings_ok = "loading"
+        try:
+            _rag().gemini.init()
+            embeddings_ok = "ok (local)"
+        except Exception as e:
+            embeddings_ok = f"error:{type(e).__name__}"
 
         rer = "disabled"
         if settings.reranker_enabled and settings.reranker_url:
@@ -106,7 +112,7 @@ def create_app() -> FastAPI:
             except Exception as e:
                 rer = f"error:{type(e).__name__}"
 
-        return HealthResponse(status="ok", qdrant=qdrant_ok, gemini=gemini_ok, reranker=rer)
+        return HealthResponse(status="ok", qdrant=qdrant_ok, embeddings=embeddings_ok, gemini=gemini_ok, reranker=rer)
 
     @app.post("/v1/ingest", response_model=IngestResponse)
     async def ingest(

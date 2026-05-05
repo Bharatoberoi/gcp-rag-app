@@ -18,11 +18,11 @@ def _env_bool(v: object) -> bool:
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
-    # Gemini API (free tier via https://aistudio.google.com/apikey)
+    # Gemini API (only used for answer generation — 1 call per query)
     gemini_api_key: str = ""
-    embedding_model: str = "gemini-embedding-001"
     gemini_model: str = "gemini-2.0-flash"
-    embedding_dimensions: int = 3072
+    # Local embeddings (sentence-transformers, no API key needed)
+    embedding_dimensions: int = 384
     # Enable agentic features (multiple LLM calls per query — needs higher rate limits)
     agentic_mode: bool = False
 
