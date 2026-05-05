@@ -91,8 +91,11 @@ def create_app() -> FastAPI:
         gemini_ok = "skipped"
         if settings.gemini_api_key:
             try:
-                _rag().gemini.init()
-                gemini_ok = "ok"
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    r = await client.get(
+                        f"https://generativelanguage.googleapis.com/v1beta/models?key={settings.gemini_api_key}"
+                    )
+                    gemini_ok = "ok" if r.status_code < 400 else f"status_{r.status_code}"
             except Exception as e:
                 gemini_ok = f"error:{type(e).__name__}"
 

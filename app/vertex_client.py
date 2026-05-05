@@ -29,6 +29,7 @@ class GeminiClient:
         self.init()
         out: list[list[float]] = []
         batch_size = 16
+        timeout = httpx.Timeout(connect=10.0, read=30.0, write=10.0, pool=10.0)
         for i in range(0, len(texts), batch_size):
             batch = list(texts[i : i + batch_size])
             requests = [
@@ -36,7 +37,7 @@ class GeminiClient:
                 for t in batch
             ]
             url = f"{BASE_URL}/models/{settings.embedding_model}:batchEmbedContents?key={settings.gemini_api_key}"
-            with httpx.Client(timeout=60.0) as client:
+            with httpx.Client(timeout=timeout) as client:
                 resp = client.post(url, json={"requests": requests})
                 resp.raise_for_status()
                 data = resp.json()
