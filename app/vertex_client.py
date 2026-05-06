@@ -1,4 +1,4 @@
-"""Hybrid client: local embeddings (sentence-transformers) + Gemini for generation.
+"""Hybrid client: local embeddings (fastembed/ONNX) + Gemini for generation.
 
 Embeddings run locally with no API key needed. Gemini is only called once per
 query for answer generation, minimizing rate limit issues.
@@ -9,21 +9,19 @@ from __future__ import annotations
 from typing import Sequence
 
 import httpx
-from sentence_transformers import SentenceTransformer
 
 from app.config import settings
 
 BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
 
-_embed_model: SentenceTransformer | None = None
+_embed_model = None
 
 
-def _get_embed_model() -> SentenceTransformer:
+def _get_embed_model():
     global _embed_model
     if _embed_model is None:
-        import os
-        os.environ.setdefault("SENTENCE_TRANSFORMERS_HOME", "/app/models")
-        _embed_model = SentenceTransformer("all-MiniLM-L6-v2")
+        from fastembed import TextEmbedding
+        _embed_model = TextEmbedding("BAAI/bge-small-en-v1.5", cache_dir="/app/models")
     return _embed_model
 
 
@@ -38,9 +36,9 @@ class GeminiClient:
         self._ready = True
 
     async def embed_texts_async(self, texts: Sequence[str]) -> list[list[float]]:
-        """Embed texts locally using sentence-transformers (no API key needed)."""
+        """Embed texts locally using fastembed ONNX (no API key needed)."""
         model = _get_embed_model()
-        embeddings = model.encode(list(texts), normalize_embeddings=True)
+        embeddings = list(model.embed(list(texts)))
         return [emb.tolist() for emb in embeddings]
 
     async def generate_answer_async(self, system_prompt: str, user_prompt: str) -> str:
@@ -61,8 +59,8 @@ class GeminiClient:
         if not candidates:
             return "No response from model."
         parts = candidates[0].get("content", {}).get("parts", [])
-        texts = [p["text"] for p in parts if "text" in p]
-        return "\n".join(texts).strip() or "No text in model response."
+        texts_out = [p["text"] for p in parts if "text" in p]
+        return "\n".join(texts_out).strip() or "No text in model response."
 
     async def generate_short_async(self, prompt: str, temperature: float = 0.1, max_tokens: int = 300) -> str:
         """Generate a short response for query planning, rewriting, etc."""
