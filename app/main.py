@@ -86,16 +86,17 @@ def create_app() -> FastAPI:
             except Exception as e:
                 qdrant_ok = f"error:{type(e).__name__}"
 
-        gemini_ok = "skipped"
-        if settings.gemini_api_key:
+        llm_ok = "skipped"
+        if settings.groq_api_key:
             try:
                 async with httpx.AsyncClient(timeout=10.0) as client:
                     r = await client.get(
-                        f"https://generativelanguage.googleapis.com/v1beta/models?key={settings.gemini_api_key}"
+                        "https://api.groq.com/openai/v1/models",
+                        headers={"Authorization": f"Bearer {settings.groq_api_key}"},
                     )
-                    gemini_ok = "ok" if r.status_code < 400 else f"status_{r.status_code}"
+                    llm_ok = "ok" if r.status_code < 400 else f"status_{r.status_code}"
             except Exception as e:
-                gemini_ok = f"error:{type(e).__name__}"
+                llm_ok = f"error:{type(e).__name__}"
         embeddings_ok = "loading"
         try:
             _rag().gemini.init()
@@ -112,7 +113,7 @@ def create_app() -> FastAPI:
             except Exception as e:
                 rer = f"error:{type(e).__name__}"
 
-        return HealthResponse(status="ok", qdrant=qdrant_ok, embeddings=embeddings_ok, gemini=gemini_ok, reranker=rer)
+        return HealthResponse(status="ok", qdrant=qdrant_ok, embeddings=embeddings_ok, gemini=llm_ok, reranker=rer)
 
     @app.post("/v1/ingest", response_model=IngestResponse)
     async def ingest(

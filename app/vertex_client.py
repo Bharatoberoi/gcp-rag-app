@@ -1,7 +1,7 @@
-"""Hybrid client: local embeddings (fastembed/ONNX) + Gemini for generation.
+"""Hybrid client: local embeddings (fastembed/ONNX) + Groq for generation.
 
-Embeddings run locally with no API key needed. Gemini is only called once per
-query for answer generation, minimizing rate limit issues.
+Embeddings run locally with no API key needed. Groq is only called once per
+query for answer generation. Groq free tier: 30 RPM, 14,400 RPD.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ import httpx
 
 from app.config import settings
 
-BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
+GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 
 _embed_model = None
 
@@ -26,6 +26,8 @@ def _get_embed_model():
 
 
 class GeminiClient:
+    """Despite the class name, now uses Groq for generation and fastembed for embeddings."""
+
     def __init__(self) -> None:
         self._ready = False
 
@@ -42,42 +44,52 @@ class GeminiClient:
         return [emb.tolist() for emb in embeddings]
 
     async def generate_answer_async(self, system_prompt: str, user_prompt: str) -> str:
-        """Generate answer using Gemini API (single call per query)."""
-        if not settings.gemini_api_key:
-            raise RuntimeError("GEMINI_API_KEY is required for answer generation")
-        url = f"{BASE_URL}/models/{settings.gemini_model}:generateContent?key={settings.gemini_api_key}"
+        """Generate answer using Groq API (single call per query)."""
+        if not settings.groq_api_key:
+            raise RuntimeError("GROQ_API_KEY is required for answer generation")
         body = {
-            "contents": [{"parts": [{"text": f"{system_prompt}\n\n{user_prompt}"}]}],
-            "generationConfig": {"temperature": 0.2, "maxOutputTokens": 2048},
+            "model": settings.llm_model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            "temperature": 0.2,
+            "max_tokens": 2048,
+        }
+        headers = {
+            "Authorization": f"Bearer {settings.groq_api_key}",
+            "Content-Type": "application/json",
         }
         timeout = httpx.Timeout(connect=10.0, read=60.0, write=10.0, pool=10.0)
         async with httpx.AsyncClient(timeout=timeout) as client:
-            resp = await client.post(url, json=body)
+            resp = await client.post(GROQ_URL, json=body, headers=headers)
             resp.raise_for_status()
             data = resp.json()
-        candidates = data.get("candidates", [])
-        if not candidates:
+        choices = data.get("choices", [])
+        if not choices:
             return "No response from model."
-        parts = candidates[0].get("content", {}).get("parts", [])
-        texts_out = [p["text"] for p in parts if "text" in p]
-        return "\n".join(texts_out).strip() or "No text in model response."
+        return choices[0].get("message", {}).get("content", "").strip() or "No text in model response."
 
     async def generate_short_async(self, prompt: str, temperature: float = 0.1, max_tokens: int = 300) -> str:
         """Generate a short response for query planning, rewriting, etc."""
-        if not settings.gemini_api_key:
+        if not settings.groq_api_key:
             return ""
-        url = f"{BASE_URL}/models/{settings.gemini_model}:generateContent?key={settings.gemini_api_key}"
         body = {
-            "contents": [{"parts": [{"text": prompt}]}],
-            "generationConfig": {"temperature": temperature, "maxOutputTokens": max_tokens},
+            "model": settings.llm_model,
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+        }
+        headers = {
+            "Authorization": f"Bearer {settings.groq_api_key}",
+            "Content-Type": "application/json",
         }
         timeout = httpx.Timeout(connect=10.0, read=30.0, write=10.0, pool=10.0)
         async with httpx.AsyncClient(timeout=timeout) as client:
-            resp = await client.post(url, json=body)
+            resp = await client.post(GROQ_URL, json=body, headers=headers)
             resp.raise_for_status()
             data = resp.json()
-        candidates = data.get("candidates", [])
-        if not candidates:
+        choices = data.get("choices", [])
+        if not choices:
             return ""
-        parts = candidates[0].get("content", {}).get("parts", [])
-        return "".join(p.get("text", "") for p in parts).strip()
+        return choices[0].get("message", {}).get("content", "").strip()

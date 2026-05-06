@@ -18,12 +18,12 @@ def _env_bool(v: object) -> bool:
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
-    # Gemini API (only used for answer generation — 1 call per query)
-    gemini_api_key: str = ""
-    gemini_model: str = "gemini-2.0-flash"
-    # Local embeddings (sentence-transformers, no API key needed)
+    # LLM API for answer generation (Groq free tier: 30 RPM, 14400 RPD)
+    groq_api_key: str = ""
+    llm_model: str = "llama-3.1-8b-instant"
+    # Local embeddings (fastembed ONNX, no API key needed)
     embedding_dimensions: int = 384
-    # Enable agentic features (multiple LLM calls per query — needs higher rate limits)
+    # Enable agentic features (multiple LLM calls per query)
     agentic_mode: bool = False
 
     # Qdrant
@@ -40,7 +40,7 @@ class Settings(BaseSettings):
     adjacent_chunk_count: int = 1
     retrieval_multiplier: int = 2
 
-    # Reranker (built-in uses Gemini; set reranker_url for external cross-encoder)
+    # Reranker (built-in uses LLM; set reranker_url for external cross-encoder)
     reranker_url: str | None = None
     reranker_enabled: bool = True
 
@@ -61,7 +61,7 @@ class Settings(BaseSettings):
             return v.strip()
         return v
 
-    @field_validator("production_mode", "docs_enabled", "reranker_enabled", mode="before")
+    @field_validator("production_mode", "docs_enabled", "reranker_enabled", "agentic_mode", mode="before")
     @classmethod
     def coerce_bool_flags(cls, v: object) -> bool:
         return _env_bool(v)
