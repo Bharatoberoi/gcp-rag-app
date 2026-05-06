@@ -21,6 +21,8 @@ _embed_model: SentenceTransformer | None = None
 def _get_embed_model() -> SentenceTransformer:
     global _embed_model
     if _embed_model is None:
+        import os
+        os.environ.setdefault("SENTENCE_TRANSFORMERS_HOME", "/app/models")
         _embed_model = SentenceTransformer("all-MiniLM-L6-v2")
     return _embed_model
 
