@@ -30,11 +30,16 @@ class RagPipeline:
         chunks = self.chunker.sections_to_chunks(Path(filename).name, sections)
         if not chunks:
             return 0
-        texts = [c.embedding_input() for c in chunks]
-        vectors = await self.gemini.embed_texts_async(texts)
-        if len(vectors) != len(chunks):
-            raise RuntimeError("Embedding count mismatch")
-        self.store.upsert_chunks(chunks, vectors)
+        # Embed in batches to avoid timeout on large documents
+        batch_size = 16
+        all_vectors: list[list[float]] = []
+        for i in range(0, len(chunks), batch_size):
+            batch = chunks[i : i + batch_size]
+            texts = [c.embedding_input() for c in batch]
+            vecs = await self.gemini.embed_texts_async(texts)
+            all_vectors.extend(vecs)
+            # Upsert each batch immediately so partial progress is saved
+            self.store.upsert_chunks(batch, vecs)
         return len(chunks)
 
     def delete_document(self, source_name: str) -> None:

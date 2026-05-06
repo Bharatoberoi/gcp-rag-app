@@ -6,10 +6,15 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 import httpx
-from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
+import asyncio
+import logging
+
+from fastapi import BackgroundTasks, Depends, FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
+
+logger = logging.getLogger(__name__)
 
 from app.config import settings
 from app.deps import require_api_key_if_configured
@@ -118,6 +123,7 @@ def create_app() -> FastAPI:
     @app.post("/v1/ingest", response_model=IngestResponse)
     async def ingest(
         file: UploadFile = File(...),
+        background_tasks: BackgroundTasks = BackgroundTasks(),
         _: None = Depends(require_api_key_if_configured),
     ):
         if not file.filename:
@@ -125,17 +131,52 @@ def create_app() -> FastAPI:
         raw = await file.read()
         if not raw:
             raise HTTPException(400, "empty file")
+
+        filename = file.filename
+        rag = _rag()
+
+        # For small files, process inline (fast enough to not timeout)
         try:
-            n = await _rag().ingest_bytes_async(file.filename, raw)
+            from app.document_loaders import load_document
+            from app.chunking import ChunkingService
+
+            sections = load_document(filename, raw)
+            if not sections:
+                return IngestResponse(document=Path(filename).name, chunks_indexed=0, message="no text extracted")
+
+            chunker = ChunkingService()
+            chunks = chunker.sections_to_chunks(Path(filename).name, sections)
+            if not chunks:
+                return IngestResponse(document=Path(filename).name, chunks_indexed=0, message="no text extracted")
+
+            # If few chunks, process inline (< 10 seconds)
+            if len(chunks) <= 20:
+                n = await rag.ingest_bytes_async(filename, raw)
+                return IngestResponse(
+                    document=Path(filename).name,
+                    chunks_indexed=n,
+                    message="indexed" if n else "no text extracted",
+                )
+
+            # For large docs, start background processing and return immediately
+            async def _bg_ingest():
+                try:
+                    n = await rag.ingest_bytes_async(filename, raw)
+                    logger.info(f"Background ingest complete: {filename} -> {n} chunks")
+                except Exception as e:
+                    logger.error(f"Background ingest failed: {filename}: {e}")
+
+            asyncio.ensure_future(_bg_ingest())
+            return IngestResponse(
+                document=Path(filename).name,
+                chunks_indexed=len(chunks),
+                message=f"indexing {len(chunks)} chunks in background",
+            )
+
         except ValueError as e:
             raise HTTPException(400, str(e)) from e
         except Exception as e:
             raise HTTPException(500, f"ingest failed: {e}") from e
-        return IngestResponse(
-            document=Path(file.filename).name,
-            chunks_indexed=n,
-            message="indexed" if n else "no text extracted",
-        )
 
     @app.delete("/v1/documents/{name:path}")
     def delete_document(
