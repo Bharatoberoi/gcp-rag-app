@@ -1,4 +1,4 @@
-"""Pytest defaults: avoid real Vertex/Qdrant during unit regression runs."""
+"""Pytest defaults: avoid real Groq/Qdrant during unit regression runs."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import os
 
 # Before importing the app
 os.environ.setdefault("QDRANT_URL", "memory")
-os.environ.setdefault("GCP_PROJECT", "")
+os.environ.setdefault("GROQ_API_KEY", "")
 os.environ.setdefault("PRODUCTION_MODE", "false")
 os.environ.setdefault("DOCS_ENABLED", "true")
 os.environ.setdefault("API_KEYS", "")

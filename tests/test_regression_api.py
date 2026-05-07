@@ -18,7 +18,7 @@ def test_health_ok(client: TestClient):
     assert r.status_code == 200
     body = r.json()
     assert body["status"] == "ok"
-    assert "qdrant" in body and "vertex" in body
+    assert "qdrant" in body and "llm" in body
 
 
 def test_root_redirects_to_ui(client: TestClient):
@@ -73,12 +73,30 @@ def test_query_empty_question(client: TestClient):
     assert r.status_code == 400
 
 
+def test_query_rejects_out_of_range_top_k(client: TestClient):
+    r = client.post("/v1/query", json={"question": "What is RAG?", "top_k": 1000})
+    assert r.status_code == 422
+
+
 def test_ingest_empty_file(client: TestClient):
     r = client.post(
         "/v1/ingest",
         files={"file": ("empty.txt", io.BytesIO(b""), "text/plain")},
     )
     assert r.status_code == 400
+
+
+def test_ingest_rejects_oversized_file(client: TestClient):
+    prev = settings.max_upload_bytes
+    try:
+        settings.max_upload_bytes = 4
+        r = client.post(
+            "/v1/ingest",
+            files={"file": ("too-big.txt", io.BytesIO(b"hello"), "text/plain")},
+        )
+        assert r.status_code == 413
+    finally:
+        settings.max_upload_bytes = prev
 
 
 def test_api_key_rejects_missing_header(client: TestClient):

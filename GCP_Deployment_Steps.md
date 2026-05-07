@@ -40,14 +40,16 @@ cp terraform.tfvars.example terraform.tfvars
 - `container_image` = the image we built in Step 2
 - `qdrant_url` = database address
 - `qdrant_secret_id` = credential storage location
+- `groq_secret_id` = LLM API key storage location
 
 ---
 
 ### **Step 4: Store Secrets Safely**
 ```
 gcloud secrets create rag-qdrant-api-key --data-file=qdrant_key.txt
+gcloud secrets create rag-groq-api-key --data-file=groq_key.txt
 ```
-**What it does:** Stores sensitive info (database password/API key) securely in GCP Secret Manager so it's not exposed in code.
+**What it does:** Stores sensitive info (database/API keys) securely in GCP Secret Manager so it's not exposed in code.
 
 ---
 
@@ -102,13 +104,13 @@ gcloud run services update gcp-rag-app --image <latest-image>
 
 ```
 Your Local Code
-      ↓
+      |
 Step 2: Build Docker Image (on GCP)
-      ↓
+      |
 Store in Registry
-      ↓
+      |
 Step 7: Terraform creates Cloud Run + IAM + Secrets
-      ↓
+      |
 App is now running publicly on:
 https://gcp-rag-app-1042144655480.us-central1.run.app
 ```
@@ -125,16 +127,16 @@ https://gcp-rag-app-1042144655480.us-central1.run.app
 | **IAM** | Control who can do what |
 | **Secret Manager** | Store passwords/API keys safely |
 | **Terraform** | Infrastructure as Code (automate creation) |
-| **Vertex AI** | AI model (Gemini embeddings in your app) |
+| **Groq** | LLM answer generation API used by your app |
 | **Qdrant** | Vector database (stores document embeddings) |
 
 ---
 
 ## **Why This Approach?**
 
-✅ **Repeatable** - Run the same commands again = same setup  
-✅ **Secure** - Passwords never in code  
-✅ **Scalable** - Auto-scales from 0 to 10 instances based on traffic  
-✅ **Production-ready** - Proper logging, health checks, monitoring  
+- **Repeatable** - Run the same commands again = same setup  
+- **Secure** - Passwords never in code  
+- **Scalable** - Auto-scales from 0 to 10 instances based on traffic  
+- **Production-ready** - Proper logging, health checks, monitoring  
 
 Does this make sense? Any specific step you want me to explain more?

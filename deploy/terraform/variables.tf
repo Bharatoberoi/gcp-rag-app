@@ -1,12 +1,12 @@
 variable "project_id" {
   type        = string
-  description = "GCP project id (same as Vertex / billing project)."
+  description = "GCP project id."
 }
 
 variable "region" {
   type        = string
   default     = "us-central1"
-  description = "Cloud Run + Vertex region (keep Qdrant cluster in a compatible region)."
+  description = "Cloud Run region (keep Qdrant cluster in a compatible region)."
 }
 
 variable "service_name" {
@@ -27,6 +27,11 @@ variable "qdrant_url" {
 variable "qdrant_secret_id" {
   type        = string
   description = "Secret Manager secret id containing the Qdrant API key (create before apply)."
+}
+
+variable "groq_secret_id" {
+  type        = string
+  description = "Secret Manager secret id containing the Groq API key used for answer generation."
 }
 
 variable "app_api_keys_secret_id" {

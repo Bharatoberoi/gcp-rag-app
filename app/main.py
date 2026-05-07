@@ -113,7 +113,7 @@ def create_app() -> FastAPI:
             except Exception as e:
                 rer = f"error:{type(e).__name__}"
 
-        return HealthResponse(status="ok", qdrant=qdrant_ok, embeddings=embeddings_ok, gemini=llm_ok, reranker=rer)
+        return HealthResponse(status="ok", qdrant=qdrant_ok, embeddings=embeddings_ok, llm=llm_ok, reranker=rer)
 
     @app.post("/v1/ingest", response_model=IngestResponse)
     async def ingest(
@@ -125,6 +125,9 @@ def create_app() -> FastAPI:
         raw = await file.read()
         if not raw:
             raise HTTPException(400, "empty file")
+        if len(raw) > settings.max_upload_bytes:
+            limit_mb = settings.max_upload_bytes / (1024 * 1024)
+            raise HTTPException(413, f"file too large; max upload size is {limit_mb:g} MB")
         try:
             n = await _rag().ingest_bytes_async(file.filename, raw)
         except ValueError as e:
@@ -169,7 +172,7 @@ def create_app() -> FastAPI:
                 "hybrid_dense_sparse_bm25_rrf",
                 "adjacent_chunk_expansion",
                 "cross_encoder_rerank_optional",
-                "gemini_embeddings_and_generation",
+                "local_hash_embeddings_and_groq_generation",
             ],
             "docs": "/docs" if settings.docs_enabled else None,
         }

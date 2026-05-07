@@ -56,6 +56,27 @@ class RagPipeline:
             parts.append("")
         return "\n".join(parts)
 
+    def _extractive_answer(self, question: str, chunks: list[DocumentChunk]) -> str:
+        """Fallback answer for local/dev runs without an LLM API key."""
+        if not chunks:
+            return (
+                "I could not find relevant indexed context for that question. "
+                "Upload a document first, or try a more specific question."
+            )
+
+        parts = [
+            "GROQ_API_KEY is not configured, so I cannot generate a polished LLM answer.",
+            "Here are the most relevant passages I found:",
+            "",
+        ]
+        for i, c in enumerate(chunks[:3], start=1):
+            excerpt = " ".join(c.text.split())
+            if len(excerpt) > 700:
+                excerpt = excerpt[:700].rstrip() + "..."
+            parts.append(f"{i}. {excerpt}")
+            parts.append(f"   Source: {c.source_document}, chunk {c.chunk_index}")
+        return "\n".join(parts)
+
     async def _rewrite_query(self, question: str) -> str:
         prompt = (
             "Rewrite this user question into a clear, specific search query. "
@@ -141,20 +162,23 @@ class RagPipeline:
             hits = self.store.expand_adjacent(hits, settings.adjacent_chunk_count)
             ranked = hits[:top_k]
 
-        context = self._format_context(ranked)
-        system = (
-            "You are a careful assistant. Answer using ONLY the provided context. "
-            "If the context is insufficient, say so. Cite sources by document name when possible."
-        )
-        user = f"Question: {question}\n\n{context}"
-        answer = await self.gemini.generate_answer_async(system, user)
+        if settings.groq_api_key:
+            context = self._format_context(ranked)
+            system = (
+                "You are a careful assistant. Answer using ONLY the provided context. "
+                "If the context is insufficient, say so. Cite sources by document name when possible."
+            )
+            user = f"Question: {question}\n\n{context}"
+            answer = await self.gemini.generate_answer_async(system, user)
+        else:
+            answer = self._extractive_answer(question, ranked)
 
         sources = [
             SourceCitation(
                 source_document=c.source_document,
                 section_path=c.section_path,
                 chunk_index=c.chunk_index,
-                excerpt=c.text[:400] + ("…" if len(c.text) > 400 else ""),
+                excerpt=c.text[:400] + ("..." if len(c.text) > 400 else ""),
             )
             for c in ranked
         ]

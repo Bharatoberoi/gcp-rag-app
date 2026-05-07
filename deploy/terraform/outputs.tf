@@ -5,5 +5,5 @@ output "cloud_run_uri" {
 
 output "service_account" {
   value       = google_service_account.rag.email
-  description = "Runtime service account (Vertex AI User attached)."
+  description = "Runtime service account used by Cloud Run."
 }

@@ -47,6 +47,7 @@ class Settings(BaseSettings):
     # BM25 state
     bm25_state_path: str = "./data/bm25_df.json"
     upload_dir: str = "./data/uploads"
+    max_upload_bytes: int = 10 * 1024 * 1024
 
     # Production
     production_mode: bool = False

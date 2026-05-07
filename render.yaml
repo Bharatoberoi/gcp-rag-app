@@ -2,26 +2,23 @@ services:
   - type: web
     name: gcp-rag-app
     runtime: docker
-    plan: standard
+    plan: free
     region: oregon
     healthCheckPath: /health
+    autoDeploy: true
     envVars:
-      - key: GCP_PROJECT
-        sync: false
-      - key: GCP_LOCATION
-        value: us-central1
-      - key: EMBEDDING_MODEL
-        value: text-embedding-004
-      - key: GEMINI_MODEL
-        value: gemini-2.5-flash
-      - key: EMBEDDING_DIMENSIONS
-        value: "768"
       - key: QDRANT_URL
         sync: false
       - key: QDRANT_API_KEY
         sync: false
       - key: QDRANT_COLLECTION
         value: documents_hybrid
+      - key: GROQ_API_KEY
+        sync: false
+      - key: LLM_MODEL
+        value: llama-3.1-8b-instant
+      - key: EMBEDDING_DIMENSIONS
+        value: "384"
       - key: DENSE_VECTOR_WEIGHT
         value: "0.7"
       - key: MAX_CHUNK_TOKENS
@@ -35,21 +32,12 @@ services:
       - key: RERANKER_ENABLED
         value: "false"
       - key: BM25_STATE_PATH
-        value: /data/bm25_df.json
+        value: /tmp/bm25_df.json
+      - key: MAX_UPLOAD_BYTES
+        value: "10485760"
       - key: PRODUCTION_MODE
         value: "true"
       - key: DOCS_ENABLED
-        value: "true"
-      - key: CORS_ORIGINS
-        sync: false
+        value: "false"
       - key: API_KEYS
         sync: false
-      - key: GOOGLE_APPLICATION_CREDENTIALS
-        value: /etc/secrets/gcp-sa-key.json
-    disk:
-      name: rag-data
-      mountPath: /data
-      sizeGB: 1
-    secretFiles:
-      - filePath: /etc/secrets/gcp-sa-key.json
-        envVar: GCP_SA_KEY_JSON

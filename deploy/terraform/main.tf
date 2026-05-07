@@ -4,14 +4,8 @@ locals {
 
 resource "google_service_account" "rag" {
   account_id   = "rag-app-runner"
-  display_name = "RAG Cloud Run (Vertex + Qdrant)"
+  display_name = "RAG Cloud Run (Groq + Qdrant)"
   project      = var.project_id
-}
-
-resource "google_project_iam_member" "rag_vertex" {
-  project = var.project_id
-  role    = "roles/aiplatform.user"
-  member  = "serviceAccount:${google_service_account.rag.email}"
 }
 
 data "google_secret_manager_secret" "qdrant" {
@@ -19,10 +13,21 @@ data "google_secret_manager_secret" "qdrant" {
   project   = var.project_id
 }
 
+data "google_secret_manager_secret" "groq" {
+  secret_id = var.groq_secret_id
+  project   = var.project_id
+}
+
 resource "google_secret_manager_secret_iam_member" "qdrant_accessor" {
   secret_id = data.google_secret_manager_secret.qdrant.id
   role        = "roles/secretmanager.secretAccessor"
   member      = "serviceAccount:${google_service_account.rag.email}"
+}
+
+resource "google_secret_manager_secret_iam_member" "groq_accessor" {
+  secret_id = data.google_secret_manager_secret.groq.id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.rag.email}"
 }
 
 data "google_secret_manager_secret" "app_keys" {
@@ -46,6 +51,7 @@ resource "google_cloud_run_v2_service" "rag" {
   depends_on = [
     google_project_service.apis,
     google_secret_manager_secret_iam_member.qdrant_accessor,
+    google_secret_manager_secret_iam_member.groq_accessor,
   ]
 
   template {
@@ -84,6 +90,10 @@ resource "google_cloud_run_v2_service" "rag" {
         value = var.qdrant_url
       }
       env {
+        name  = "LLM_MODEL"
+        value = "llama-3.1-8b-instant"
+      }
+      env {
         name  = "PRODUCTION_MODE"
         value = "true"
       }
@@ -96,6 +106,15 @@ resource "google_cloud_run_v2_service" "rag" {
         value_source {
           secret_key_ref {
             secret  = data.google_secret_manager_secret.qdrant.name
+            version = "latest"
+          }
+        }
+      }
+      env {
+        name = "GROQ_API_KEY"
+        value_source {
+          secret_key_ref {
+            secret  = data.google_secret_manager_secret.groq.name
             version = "latest"
           }
         }
@@ -130,7 +149,6 @@ resource "google_cloud_run_v2_service" "rag" {
 
 resource "google_project_service" "apis" {
   for_each = toset([
-    "aiplatform.googleapis.com",
     "run.googleapis.com",
     "secretmanager.googleapis.com",
     "artifactregistry.googleapis.com",

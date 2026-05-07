@@ -45,6 +45,15 @@ class ChunkingService:
 
         for sentence in sentences:
             s_tokens = self.count_tokens(sentence)
+            if s_tokens > max_tokens:
+                if current:
+                    chunks.append(" ".join(current))
+                    current = []
+                    current_tokens = 0
+                tokens = self._enc.encode(sentence)
+                for i in range(0, len(tokens), max_tokens):
+                    chunks.append(self._enc.decode(tokens[i : i + max_tokens]))
+                continue
             if current and (current_tokens + s_tokens) > max_tokens:
                 chunks.append(" ".join(current))
                 current = [sentence]

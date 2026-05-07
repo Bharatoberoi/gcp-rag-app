@@ -6,7 +6,7 @@ from app.schemas import SourceCitation
 
 
 class MockRagPipeline:
-    def ingest_bytes(self, filename: str, raw: bytes) -> int:
+    async def ingest_bytes_async(self, filename: str, raw: bytes) -> int:
         if not raw:
             return 0
         return 2
@@ -14,7 +14,7 @@ class MockRagPipeline:
     def delete_document(self, source_name: str) -> None:
         self._deleted = source_name
 
-    async def answer(self, question: str, top_k: int = 5):
+    async def answer_async(self, question: str, top_k: int = 5):
         src = [
             SourceCitation(
                 source_document="mock.pdf",

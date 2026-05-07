@@ -9,6 +9,7 @@ import pytest
 
 from app.bm25 import Bm25SparseVectorizer
 from app.chunking import ChunkingService
+from app.rag_pipeline import RagPipeline
 from app.text_tokenizer import TextTokenizer, hash_term_to_index
 
 
@@ -34,3 +35,21 @@ def test_chunking_splits_long_text():
     chunks = ch.sections_to_chunks("doc.txt", sections)
     assert len(chunks) >= 2
     assert all(c.chunk_total == len(chunks) for c in chunks)
+
+
+@pytest.mark.asyncio
+async def test_pipeline_answers_without_groq_key(tmp_path, monkeypatch):
+    monkeypatch.setattr("app.config.settings.qdrant_url", "memory")
+    monkeypatch.setattr("app.config.settings.groq_api_key", "")
+    monkeypatch.setattr("app.config.settings.bm25_state_path", str(tmp_path / "bm25.json"))
+
+    rag = RagPipeline()
+    indexed = await rag.ingest_bytes_async(
+        "report.txt",
+        b"This report explains local RAG testing with in-memory Qdrant and fallback answers.",
+    )
+    answer, sources = await rag.answer_async("What does the report explain?", top_k=3)
+
+    assert indexed == 1
+    assert "most relevant passages" in answer
+    assert sources
